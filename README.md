@@ -1,5 +1,6 @@
-# ningenkeiba-site
+# 人間競馬
 芝生祭の人間競馬で使うサイトです。
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
