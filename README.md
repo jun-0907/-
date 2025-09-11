@@ -290,6 +290,25 @@ function resetParticipants() {
   updateAdminTable();
   alert("参加者情報をリセットしました。");
 }
+/* デフォルトスタイル */
+body {
+  font-size: 16px;
+}
+
+/* 画面幅が768px以上のデバイスの場合 */
+@media (min-width: 768px) {
+  body {
+    font-size: 18px;
+  }
+}
+
+/* 画面幅が1200px以上のデバイスの場合 */
+@media (min-width: 1200px) {
+  body {
+    font-size: 20px;
+  }
+}
+
 </script>
 </body>
 </html>
