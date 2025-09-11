@@ -290,7 +290,31 @@ function resetParticipants() {
   updateAdminTable();
   alert("参加者情報をリセットしました。");
 }
-  <meta http-equiv="refresh" content="2">
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>自動更新ページ</title>
+</head>
+<body>
+  <h1>最新情報</h1>
+  <div id="info">読み込み中...</div>
+
+  <script>
+    async function fetchData() {
+      try {
+        const response = await fetch("data.json"); // サーバーの最新データ
+        const data = await response.json();
+        document.getElementById("info").textContent = data.message;
+      } catch (error) {
+        document.getElementById("info").textContent = "取得に失敗しました";
+      }
+    }
+
+    // ページ読み込み時に実行
+    fetchData();
+
+    // 10秒ごとに更新
+    setInterval(fetchData, 10000);
 </script>
 </body>
 </html>
