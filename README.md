@@ -10,7 +10,7 @@ body {
   font-family: sans-serif;
   margin: 0;
   padding: 0;
-  background-color: #dfffd6; /* 薄い黄緑 */
+  background-color: #dfffd6;
   color: #333;
 }
 header {
@@ -44,7 +44,7 @@ th, td {
   text-align: center;
 }
 input[type="number"], input[type="text"], input[type="password"], select {
-  width: 50px;
+  width: 60px;
   padding: 3px;
   border: 1px solid #aaa;
   border-radius: 3px;
@@ -76,87 +76,101 @@ button:hover {
 <header>SIT</header>
 
 <div class="container">
-<h2>参加者登録</h2>
-<input type="text" id="participantName" placeholder="名前">
-<button onclick="addParticipant()">追加</button>
+  <h2>参加者登録</h2>
+  <input type="text" id="participantName" placeholder="名前">
+  <button onclick="addParticipant()">追加</button>
 
-<h3>登録済み参加者</h3>
-<ul id="participantList"></ul>
+  <h3>登録済み参加者</h3>
+  <ul id="participantList"></ul>
 
-<hr>
+  <hr>
 
-<h2>ポイント割り振り</h2>
-<select id="selectParticipant" onchange="updateMyPoints()"></select>
+  <h2>ポイント割り振り</h2>
+  <select id="selectParticipant"></select>
+  <div style="margin-top:10px;">
+    <label>1: <input type="number" id="bet1" value="0"></label>
+    <label>2: <input type="number" id="bet2" value="0"></label>
+    <label>3: <input type="number" id="bet3" value="0"></label>
+    <label>4: <input type="number" id="bet4" value="0"></label>
+    <label>5: <input type="number" id="bet5" value="0"></label>
+    <label>6: <input type="number" id="bet6" value="0"></label>
+    <button onclick="submitBets()">ポイント使用</button>
+  </div>
 
-<div style="margin-top:10px;">
-  <label>1: <input type="number" id="bet1" value="0"></label>
-  <label>2: <input type="number" id="bet2" value="0"></label>
-  <label>3: <input type="number" id="bet3" value="0"></label>
-  <label>4: <input type="number" id="bet4" value="0"></label>
-  <label>5: <input type="number" id="bet5" value="0"></label>
-  <label>6: <input type="number" id="bet6" value="0"></label>
-  <button onclick="submitBets()">ポイント使用</button>
+  <h3>自分の持ちポイント</h3>
+  <p id="myPoints">0</p>
+
+  <hr>
+
+  <h2>管理者ログイン</h2>
+  <input type="password" id="adminPass" placeholder="パスワード">
+  <button onclick="checkAdmin()">ログイン</button>
+
+  <div id="adminSection">
+    <h2>管理者画面</h2>
+    <button onclick="resetParticipants()">参加者情報リセット</button>
+    <table id="adminTable">
+      <thead>
+        <tr>
+          <th>名前</th>
+          <th>持ちポイント</th>
+          <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <p>
+      当たり番号: <input type="number" id="hitNumber" min="1" max="6">
+      倍率: <input type="number" id="hitOdds" step="0.1" value="2">
+      <button onclick="judgeAll()">判定</button>
+    </p>
+  </div>
 </div>
 
-<h3>自分の持ちポイント</h3>
-<p id="myPoints">0</p>
-
-<hr>
-
-<h2>管理者ログイン</h2>
-<input type="password" id="adminPass" placeholder="パスワード">
-<button onclick="checkAdmin()">ログイン</button>
-
-<div id="adminSection">
-  <h2>管理者画面</h2>
-  <button onclick="resetParticipants()">参加者情報リセット</button>
-  <button onclick="lockBets()">ポイント使用ロック</button>
-  <button onclick="unlockBets()">ロック解除</button>
-  <table id="adminTable">
-    <thead>
-      <tr>
-        <th>名前</th>
-        <th>持ちポイント</th>
-        <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
-  <p>
-    当たり番号: <input type="number" id="hitNumber" min="1" max="6">
-    倍率: <input type="number" id="hitOdds" step="0.1" value="2">
-    <button onclick="judgeAll()">判定</button>
-  </p>
-</div>
-</div>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js"></script>
 
 <script>
+// 🔹 あなたのFirebase設定に置き換えてください
+const firebaseConfig = {
+  apiKey: "AIzaSyDJMPJFhvKtiTbst0JlCqCGbgK2tLsJjf0",
+  authDomain: "ningenkeiba-6350f.firebaseapp.com",
+  projectId: "ningenkeiba-6350f",
+  storageBucket: "ningenkeiba-6350f.firebasestorage.app",
+  messagingSenderId: "655803286740",
+  appId: "1:655803286740:web:487d467f504e4f6a5e2741",
+  measurementId: "G-G21ZHE4BKL"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const participantsRef = db.ref("participants");
+
 let participants = {};
 const ADMIN_PASSWORD = "sugawara";
-let registeredThisSession = false;
-let betsLocked = false;
 
-// 参加者追加
-function addParticipant() {
-  if (registeredThisSession) {
-    alert("このセッションではすでに参加者登録済みです。ページ再読み込みで再登録可能です。");
-    return;
-  }
-
-  const name = document.getElementById("participantName").value.trim();
-  if(!name) return alert("名前を入力してください");
-  if(participants[name]) return alert("すでに存在します");
-
-  participants[name] = {points: 100, bets:{1:0,2:0,3:0,4:0,5:0,6:0}};
-  registeredThisSession = true;
-
+// 🔹 Firebase → ローカル同期
+participantsRef.on("value", snapshot => {
+  participants = snapshot.val() || {};
   updateParticipantList();
   updateParticipantSelect();
   updateAdminTable();
+});
+
+// 参加者追加
+function addParticipant() {
+  const name = document.getElementById("participantName").value.trim();
+  if (!name) return alert("名前を入力してください");
+  if (participants[name]) return alert("すでに存在します");
+
+  participantsRef.child(name).set({
+    points: 100,
+    bets: {1:0,2:0,3:0,4:0,5:0,6:0}
+  });
 }
 
-// 登録済み参加者リスト更新
+// 登録済み参加者リスト
 function updateParticipantList() {
   const ul = document.getElementById("participantList");
   ul.innerHTML = '';
@@ -167,7 +181,7 @@ function updateParticipantList() {
   });
 }
 
-// 参加者選択セレクト更新
+// セレクト更新
 function updateParticipantSelect() {
   const select = document.getElementById("selectParticipant");
   select.innerHTML = '';
@@ -181,7 +195,7 @@ function updateParticipantSelect() {
   updateMyPoints();
 }
 
-// 自分の持ちポイント表示
+// 自分のポイント表示
 function updateMyPoints() {
   const select = document.getElementById("selectParticipant");
   if(!select.value) {
@@ -189,16 +203,11 @@ function updateMyPoints() {
     return;
   }
   const name = select.value;
-  document.getElementById("myPoints").innerText = participants[name]?.points || 100;
+  document.getElementById("myPoints").innerText = participants[name]?.points || 0;
 }
 
-// ポイント割り振り
+// ベット処理
 function submitBets() {
-  if(betsLocked){
-    alert("ポイント使用は現在ロックされています");
-    return;
-  }
-
   const name = document.getElementById("selectParticipant").value;
   const p = participants[name];
   const bets = {};
@@ -214,13 +223,13 @@ function submitBets() {
     return;
   }
 
-  p.points -= totalBet;
-  p.bets = bets;
-  updateMyPoints();
-  updateAdminTable();
+  participantsRef.child(name).update({
+    points: p.points - totalBet,
+    bets: bets
+  });
 }
 
-// 管理者用テーブル更新
+// 管理者テーブル
 function updateAdminTable() {
   const tbody = document.getElementById("adminTable").querySelector("tbody");
   tbody.innerHTML = '';
@@ -261,34 +270,27 @@ function judgeAll() {
   const hit = parseInt(document.getElementById("hitNumber").value);
   const odds = parseFloat(document.getElementById("hitOdds").value);
 
-  Object.values(participants).forEach(p=>{
+  Object.entries(participants).forEach(([name,p])=>{
     const bet = p.bets[hit]||0;
+    let newPoints = p.points;
     if(bet>0){
-      p.points += bet * odds;
+      newPoints += bet * odds;
     }
-    p.bets = {1:0,2:0,3:0,4:0,5:0,6:0};
+    participantsRef.child(name).update({
+      points: newPoints,
+      bets: {1:0,2:0,3:0,4:0,5:0,6:0}
+    });
   });
 
-  updateMyPoints();
-  updateAdminTable();
-  alert("判定完了！");
+  alert("判定完了！（全員に共有されました）");
 }
 
-// 参加者リセット
+// リセット
 function resetParticipants() {
   if(!confirm("本当にすべての参加者情報を削除しますか？")) return;
-  participants = {};
-  registeredThisSession = false;
-  updateParticipantList();
-  updateParticipantSelect();
-  updateAdminTable();
+  participantsRef.set({});
   alert("参加者情報をリセットしました。");
 }
-
-// ロック/解除
-function lockBets(){ betsLocked = true; alert("ポイント使用をロックしました"); }
-function unlockBets(){ betsLocked = false; alert("ポイント使用のロックを解除しました"); }
-
 </script>
 </body>
 </html>
