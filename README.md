@@ -13,7 +13,6 @@ body {
   background-color: #dfffd6; /* 薄い黄緑 */
   color: #333;
 }
-
 header {
   background-color: #8fd694;
   color: white;
@@ -22,40 +21,34 @@ header {
   padding: 20px 0;
   font-weight: bold;
 }
-
 .container {
   padding: 20px;
   max-width: 900px;
   margin: 0 auto;
 }
-
 h2, h3 {
   color: #fff;
   background-color: #8fd694;
   padding: 5px 10px;
   border-radius: 5px;
 }
-
 table {
   border-collapse: collapse;
   width: 100%;
   margin-bottom: 20px;
   background-color: white;
 }
-
 th, td {
   border: 1px solid #aaa;
   padding: 8px 12px;
   text-align: center;
 }
-
 input[type="number"], input[type="text"], input[type="password"], select {
   width: 50px;
   padding: 3px;
   border: 1px solid #aaa;
   border-radius: 3px;
 }
-
 button {
   background-color: white;
   color: #8fd694;
@@ -66,12 +59,10 @@ button {
   font-weight: bold;
   margin-left: 5px;
 }
-
 button:hover {
   background-color: #8fd694;
   color: white;
 }
-
 #adminSection {
   display: none;
   margin-top: 20px;
@@ -95,7 +86,7 @@ button:hover {
 <hr>
 
 <h2>ポイント割り振り</h2>
-<select id="selectParticipant"></select>
+<select id="selectParticipant" onchange="updateMyPoints()"></select>
 
 <div style="margin-top:10px;">
   <label>1: <input type="number" id="bet1" value="0"></label>
@@ -119,6 +110,8 @@ button:hover {
 <div id="adminSection">
   <h2>管理者画面</h2>
   <button onclick="resetParticipants()">参加者情報リセット</button>
+  <button onclick="lockBets()">ポイント使用ロック</button>
+  <button onclick="unlockBets()">ロック解除</button>
   <table id="adminTable">
     <thead>
       <tr>
@@ -142,11 +135,12 @@ button:hover {
 let participants = {};
 const ADMIN_PASSWORD = "sugawara";
 let registeredThisSession = false;
+let betsLocked = false;
 
 // 参加者追加
 function addParticipant() {
   if (registeredThisSession) {
-    alert("このセッションではすでに参加者登録済みです。ページを再読み込みすると再登録可能です。");
+    alert("このセッションではすでに参加者登録済みです。ページ再読み込みで再登録可能です。");
     return;
   }
 
@@ -183,9 +177,7 @@ function updateParticipantSelect() {
     option.text = name;
     select.appendChild(option);
   });
-
   if(select.options.length>0 && !select.value) select.value = select.options[0].value;
-
   updateMyPoints();
 }
 
@@ -202,6 +194,11 @@ function updateMyPoints() {
 
 // ポイント割り振り
 function submitBets() {
+  if(betsLocked){
+    alert("ポイント使用は現在ロックされています");
+    return;
+  }
+
   const name = document.getElementById("selectParticipant").value;
   const p = participants[name];
   const bets = {};
@@ -223,12 +220,11 @@ function submitBets() {
   updateAdminTable();
 }
 
-// 管理者用テーブル更新（個人 + 選択肢合計表示）
+// 管理者用テーブル更新
 function updateAdminTable() {
   const tbody = document.getElementById("adminTable").querySelector("tbody");
   tbody.innerHTML = '';
 
-  // 個人行
   Object.entries(participants).forEach(([name,data])=>{
     const tr = document.createElement("tr");
     tr.innerHTML = `<td>${name}</td><td>${data.points}</td>` +
@@ -236,7 +232,6 @@ function updateAdminTable() {
     tbody.appendChild(tr);
   });
 
-  // 合計行
   const totalBets = [0,0,0,0,0,0];
   Object.values(participants).forEach(p=>{
     for(let i=1;i<=6;i++) totalBets[i-1] += p.bets[i] || 0;
@@ -244,7 +239,7 @@ function updateAdminTable() {
 
   const trTotal = document.createElement("tr");
   trTotal.style.fontWeight = "bold";
-  trTotal.style.backgroundColor = "#d0ffd0"; // 薄い黄緑
+  trTotal.style.backgroundColor = "#d0ffd0";
   trTotal.innerHTML = `<td>合計</td><td>-</td>` +
     totalBets.map(v=>`<td>${v}</td>`).join('');
   tbody.appendChild(trTotal);
@@ -279,10 +274,9 @@ function judgeAll() {
   alert("判定完了！");
 }
 
-// 管理者向け参加者情報リセット
+// 参加者リセット
 function resetParticipants() {
   if(!confirm("本当にすべての参加者情報を削除しますか？")) return;
-
   participants = {};
   registeredThisSession = false;
   updateParticipantList();
@@ -290,31 +284,11 @@ function resetParticipants() {
   updateAdminTable();
   alert("参加者情報をリセットしました。");
 }
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>自動更新ページ</title>
-</head>
-<body>
-  <h1>最新情報</h1>
-  <div id="info">読み込み中...</div>
 
-  <script>
-    async function fetchData() {
-      try {
-        const response = await fetch("data.json"); // サーバーの最新データ
-        const data = await response.json();
-        document.getElementById("info").textContent = data.message;
-      } catch (error) {
-        document.getElementById("info").textContent = "取得に失敗しました";
-      }
-    }
+// ロック/解除
+function lockBets(){ betsLocked = true; alert("ポイント使用をロックしました"); }
+function unlockBets(){ betsLocked = false; alert("ポイント使用のロックを解除しました"); }
 
-    // ページ読み込み時に実行
-    fetchData();
-
-    // 10秒ごとに更新
-    setInterval(fetchData, 10000);
 </script>
 </body>
 </html>
