@@ -132,7 +132,7 @@ button:hover {
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js"></script>
 
 <script>
-// 🔹 あなたのFirebase設定に置き換えてください
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyDJMPJFhvKtiTbst0JlCqCGbgK2tLsJjf0",
   authDomain: "ningenkeiba-6350f.firebaseapp.com",
