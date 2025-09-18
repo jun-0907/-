@@ -77,26 +77,27 @@
     <h2>参加者登録</h2>
     <input type="text" id="participantName" placeholder="名前">
     <button onclick="addParticipant()">追加</button>
+
     <h3>登録済み参加者</h3>
     <ul id="participantList"></ul>
-    <hr>
 
+    <hr>
     <h2>ポイント割り振り</h2>
     <select id="selectParticipant"></select>
     <div style="margin-top:10px;">
-      <label>1: <input type="number" id="bet1" value="0"></label>
-      <label>2: <input type="number" id="bet2" value="0"></label>
-      <label>3: <input type="number" id="bet3" value="0"></label>
-      <label>4: <input type="number" id="bet4" value="0"></label>
-      <label>5: <input type="number" id="bet5" value="0"></label>
-      <label>6: <input type="number" id="bet6" value="0"></label>
+      <label>1: <input type="number" id="bet1" value="0" min="0"></label>
+      <label>2: <input type="number" id="bet2" value="0" min="0"></label>
+      <label>3: <input type="number" id="bet3" value="0" min="0"></label>
+      <label>4: <input type="number" id="bet4" value="0" min="0"></label>
+      <label>5: <input type="number" id="bet5" value="0" min="0"></label>
+      <label>6: <input type="number" id="bet6" value="0" min="0"></label>
       <button onclick="submitBets()">ポイント使用</button>
     </div>
 
     <h3>自分の持ちポイント</h3>
     <p id="myPoints">0</p>
-    <hr>
 
+    <hr>
     <h2>管理者ログイン</h2>
     <input type="password" id="adminPass" placeholder="パスワード">
     <button onclick="checkAdmin()">ログイン</button>
@@ -109,7 +110,8 @@
           <tr>
             <th>名前</th>
             <th>持ちポイント</th>
-            <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th>
+            <th>1</th><th>2</th><th>3</th>
+            <th>4</th><th>5</th><th>6</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -122,7 +124,7 @@
     </div>
   </div>
 
-  <!-- Firebase SDK (v8 系を使用する) -->
+  <!-- Firebase SDK v8 -->
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
@@ -138,12 +140,12 @@
       measurementId: "G-G21ZHE4BKL"
     };
 
-    // Firebase 初期化
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     const participantsRef = db.ref("participants");
-    let participants = {};
 
+    let participants = {};
+    let myName = localStorage.getItem("myName") || null;
     const ADMIN_PASSWORD = "sugawara";
 
     // 🔹 Firebase → ローカル同期
@@ -165,7 +167,11 @@
         bets: {1:0,2:0,3:0,4:0,5:0,6:0}
       });
 
+      localStorage.setItem("myName", name);
+      myName = name;
+
       document.getElementById("participantName").value = "";
+      alert("登録完了！ あなたのアカウントは「" + name + "」です。");
     }
 
     // 登録済み参加者リスト
@@ -183,74 +189,112 @@
     function updateParticipantSelect() {
       const select = document.getElementById("selectParticipant");
       select.innerHTML = '';
-      Object.keys(participants).forEach(name=>{
+
+      if (myName && participants[myName]) {
         const option = document.createElement("option");
-        option.value = name;
-        option.text = name;
+        option.value = myName;
+        option.text = myName;
         select.appendChild(option);
-      });
-      if(select.options.length>0 && !select.value) select.value = select.options[0].value;
+        select.disabled = true;
+      } else {
+        Object.keys(participants).forEach(name => {
+          const option = document.createElement("option");
+          option.value = name;
+          option.text = name;
+          select.appendChild(option);
+        });
+        select.disabled = false;
+      }
+
+      if (select.options.length > 0 && !select.value)
+        select.value = select.options[0].value;
+
       updateMyPoints();
     }
 
     // 自分のポイント表示
     function updateMyPoints() {
       const select = document.getElementById("selectParticipant");
-      if(!select.value) {
+      if (!select.value) {
         document.getElementById("myPoints").innerText = 0;
         return;
       }
       const name = select.value;
-      document.getElementById("myPoints").innerText = participants[name]?.points || 0;
+      document.getElementById("myPoints").innerText =
+        participants[name]?.points || 0;
     }
 
-    // ベット処理
+    // ベット処理（累積対応）
     function submitBets() {
       const name = document.getElementById("selectParticipant").value;
+      if (!myName || name !== myName) {
+        return alert("自分のアカウントでのみ操作できます");
+      }
+
       const p = participants[name];
       if (!p) return alert("参加者が見つかりません");
-      const bets = {};
-      let totalBet = 0;
-      for(let i=1;i<=6;i++){
-        bets[i] = parseInt(document.getElementById("bet"+i).value)||0;
-        totalBet += bets[i];
+
+      const bets = {...p.bets}; // 既存のベットを保持
+      let newBetSum = 0;
+
+      for (let i = 1; i <= 6; i++) {
+        let val = document.getElementById("bet" + i).value;
+        if (val === "") val = "0";
+        let bet = parseInt(val, 10);
+
+        if (isNaN(bet) || bet < 0) {
+          return alert("ポイントは 0 以上の整数で入力してください");
+        }
+
+        bets[i] += bet;   // 累積
+        newBetSum += bet;
       }
-      if(totalBet > p.points){
+
+      if (newBetSum > p.points) {
         alert("ポイントが足りません！");
         return;
       }
+
       participantsRef.child(name).update({
-        points: p.points - totalBet,
+        points: p.points - newBetSum, // 今回分だけ減算
         bets: bets
       });
+
+      // 入力欄をリセット
+      for (let i = 1; i <= 6; i++) {
+        document.getElementById("bet" + i).value = "0";
+      }
     }
 
     // 管理者テーブル
     function updateAdminTable() {
       const tbody = document.getElementById("adminTable").querySelector("tbody");
       tbody.innerHTML = '';
-      Object.entries(participants).forEach(([name,data])=>{
+
+      Object.entries(participants).forEach(([name, data]) => {
         const tr = document.createElement("tr");
         tr.innerHTML = `<td>${name}</td><td>${data.points}</td>` +
-          Array.from({length:6},(_,i)=>`<td>${data.bets[i+1]}</td>`).join('');
+          Array.from({ length: 6 }, (_, i) => `<td>${data.bets[i+1]}</td>`).join('');
         tbody.appendChild(tr);
       });
+
       const totalBets = [0,0,0,0,0,0];
-      Object.values(participants).forEach(p=>{
-        for(let i=1;i<=6;i++) totalBets[i-1] += p.bets[i] || 0;
+      Object.values(participants).forEach(p => {
+        for (let i=1; i<=6; i++) totalBets[i-1] += p.bets[i] || 0;
       });
+
       const trTotal = document.createElement("tr");
       trTotal.style.fontWeight = "bold";
       trTotal.style.backgroundColor = "#d0ffd0";
       trTotal.innerHTML = `<td>合計</td><td>-</td>` +
-        totalBets.map(v=>`<td>${v}</td>`).join('');
+        totalBets.map(v => `<td>${v}</td>`).join('');
       tbody.appendChild(trTotal);
     }
 
     // 管理者ログイン
     function checkAdmin() {
       const pass = document.getElementById("adminPass").value;
-      if(pass === ADMIN_PASSWORD){
+      if (pass === ADMIN_PASSWORD) {
         document.getElementById("adminSection").style.display = "block";
         alert("管理者ログイン成功！");
       } else {
@@ -262,10 +306,11 @@
     function judgeAll() {
       const hit = parseInt(document.getElementById("hitNumber").value);
       const odds = parseFloat(document.getElementById("hitOdds").value);
-      Object.entries(participants).forEach(([name,p])=>{
-        const bet = p.bets[hit]||0;
+
+      Object.entries(participants).forEach(([name, p]) => {
+        const bet = p.bets[hit] || 0;
         let newPoints = p.points;
-        if(bet>0){
+        if (bet > 0) {
           newPoints += bet * odds;
         }
         participantsRef.child(name).update({
@@ -273,12 +318,13 @@
           bets: {1:0,2:0,3:0,4:0,5:0,6:0}
         });
       });
+
       alert("判定完了！（全員に共有されました）");
     }
 
     // リセット
     function resetParticipants() {
-      if(!confirm("本当にすべての参加者情報を削除しますか？")) return;
+      if (!confirm("本当にすべての参加者情報を削除しますか？")) return;
       participantsRef.set({});
       alert("参加者情報をリセットしました。");
     }
