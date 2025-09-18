@@ -107,18 +107,30 @@ function registerOrLogin() {
   const name = document.getElementById("participantName").value.trim();
   if (!name) return alert("名前を入力してください");
 
-  if (!participants[name]) {
-    // 新規登録
-    participantsRef.child(name).set({
-      points: 100,
-      bets: {1:0,2:0,3:0,4:0,5:0,6:0}
-    });
-    alert("新規登録しました: " + name);
-  } else {
-    alert("ログインしました: " + name);
-  }
+  participantsRef.child(name).get().then(snapshot => {
+    if (!snapshot.exists()) {
+      // 新規登録
+      participantsRef.child(name).set({
+        points: 100,
+        bets: {1:0,2:0,3:0,4:0,5:0,6:0}
+      }).then(() => {
+        alert("新規登録しました: " + name);
+        finishLogin(name);
+      });
+    } else {
+      alert("ログインしました: " + name);
+      finishLogin(name);
+    }
+  }).catch(err => {
+    console.error("Firebaseエラー:", err);
+    alert("登録に失敗しました");
+  });
+}
+
+function finishLogin(name) {
   currentUser = name;
   localStorage.setItem("currentUser", name);
+  document.getElementById("participantName").value = ""; // 入力欄クリア
   document.getElementById("loginStatus").innerText = "ログイン中: " + currentUser;
   updateMyPoints();
 }
