@@ -12,7 +12,7 @@
     h2, h3 { color: #fff; background-color: #8fd694; padding: 5px 10px; border-radius: 5px; }
     table { border-collapse: collapse; width: 100%; margin-bottom: 20px; background-color: white; }
     th, td { border: 1px solid #aaa; padding: 8px 12px; text-align: center; }
-    input[type="number"], input[type="text"], input[type="password"], select { width: 80px; padding: 3px; border: 1px solid #aaa; border-radius: 3px; }
+    input[type="number"], input[type="text"], input[type="password"], select { width: 120px; padding: 3px; border: 1px solid #aaa; border-radius: 3px; }
     button { background-color: white; color: #8fd694; border: 2px solid #8fd694; padding: 5px 12px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-left: 5px; }
     button:hover { background-color: #8fd694; color: white; }
     #adminSection { display: none; margin-top: 20px; border-top: 2px solid #8fd694; padding-top: 10px; }
@@ -23,6 +23,7 @@
 <div class="container">
   <h2>参加者登録 / ログイン</h2>
   <input type="text" id="participantName" placeholder="名前">
+  <input type="password" id="participantPass" placeholder="パスワード">
   <button onclick="registerOrLogin()">登録/ログイン</button>
   <p id="loginStatus">未ログイン</p>
 
@@ -105,12 +106,14 @@ participantsRef.on("value", snapshot => {
 // 登録/ログイン
 function registerOrLogin() {
   const name = document.getElementById("participantName").value.trim();
-  if (!name) return alert("名前を入力してください");
+  const pass = document.getElementById("participantPass").value.trim();
+  if (!name || !pass) return alert("名前とパスワードを入力してください");
 
   participantsRef.child(name).get().then(snapshot => {
     if (!snapshot.exists()) {
       // 新規登録
       participantsRef.child(name).set({
+        password: pass,
         points: 100,
         bets: {1:0,2:0,3:0,4:0,5:0,6:0}
       }).then(() => {
@@ -118,19 +121,26 @@ function registerOrLogin() {
         finishLogin(name);
       });
     } else {
-      alert("ログインしました: " + name);
-      finishLogin(name);
+      // 既存 → パスワードチェック
+      const data = snapshot.val();
+      if (data.password === pass) {
+        alert("ログインしました: " + name);
+        finishLogin(name);
+      } else {
+        alert("パスワードが間違っています");
+      }
     }
   }).catch(err => {
     console.error("Firebaseエラー:", err);
-    alert("登録に失敗しました");
+    alert("登録/ログインに失敗しました");
   });
 }
 
 function finishLogin(name) {
   currentUser = name;
   localStorage.setItem("currentUser", name);
-  document.getElementById("participantName").value = ""; // 入力欄クリア
+  document.getElementById("participantName").value = "";
+  document.getElementById("participantPass").value = "";
   document.getElementById("loginStatus").innerText = "ログイン中: " + currentUser;
   updateMyPoints();
 }
@@ -159,11 +169,17 @@ function updateMyPoints() {
 function submitBets() {
   if (!currentUser) return alert("先にログインしてください");
   const p = participants[currentUser];
+  const alreadyBet = Object.values(p.bets).some(v => v > 0);
+  if (alreadyBet) {
+    alert("すでにベット済みです。判定後までお待ちください。");
+    return;
+  }
+
   const bets = {};
   let totalBet = 0;
   for (let i=1;i<=6;i++){
     let val = parseInt(document.getElementById("bet"+i).value)||0;
-    if (val < 0) val = 0; // 0以上に制限
+    if (val < 0) val = 0;
     bets[i] = val;
     totalBet += val;
   }
@@ -181,7 +197,13 @@ function submitBets() {
 function updateAdminTable() {
   const tbody = document.getElementById("adminTable").querySelector("tbody");
   tbody.innerHTML = '';
+  let totalPoints = 0;
+  const totalBets = [0,0,0,0,0,0];
+
   Object.entries(participants).forEach(([name,data])=>{
+    totalPoints += data.points || 0;
+    for(let i=1;i<=6;i++) totalBets[i-1] += data.bets[i] || 0;
+
     const tr = document.createElement("tr");
     tr.innerHTML = `<td>${name}</td><td>${data.points}</td>` +
       Array.from({length:6},(_,i)=>`<td>${data.bets[i+1]}</td>`).join('') +
@@ -191,14 +213,13 @@ function updateAdminTable() {
       </td>`;
     tbody.appendChild(tr);
   });
-  const totalBets = [0,0,0,0,0,0];
-  Object.values(participants).forEach(p=>{
-    for(let i=1;i<=6;i++) totalBets[i-1] += p.bets[i] || 0;
-  });
+
+  // 合計行
   const trTotal = document.createElement("tr");
   trTotal.style.fontWeight = "bold";
   trTotal.style.backgroundColor = "#d0ffd0";
-  trTotal.innerHTML = `<td>合計</td><td>-</td>` + totalBets.map(v=>`<td>${v}</td>`).join('') + `<td>-</td>`;
+  trTotal.innerHTML = `<td>合計</td><td>${totalPoints}</td>` +
+    totalBets.map(v=>`<td>${v}</td>`).join('') + `<td>-</td>`;
   tbody.appendChild(trTotal);
 }
 
