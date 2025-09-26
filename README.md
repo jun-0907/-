@@ -68,6 +68,10 @@
       border-top: 2px solid #8fd694;
       padding-top: 10px;
     }
+    #status {
+      font-weight: bold;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
@@ -135,10 +139,15 @@
         倍率: <input type="number" id="hitOdds" step="0.1" value="2">
         <button onclick="judgeAll()">判定</button>
       </p>
+
+      <!-- 🔹 ポイント使用制限 -->
+      <h3>ポイント使用制限</h3>
+      <button onclick="togglePoints()">ポイント使用 ON/OFF</button>
+      <p id="status">現在の状態: 取得中...</p>
     </div>
   </div>
 
-  <!-- Firebase SDK v8 -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
@@ -156,10 +165,16 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     const participantsRef = db.ref("participants");
+    const settingsRef = db.ref("settings");
 
     let participants = {};
     let myName = localStorage.getItem("myName") || null;
     const ADMIN_PASSWORD = "sugawara";
+
+    // 初期設定
+    settingsRef.child("pointsEnabled").once("value").then(snap => {
+      if (snap.val() === null) settingsRef.child("pointsEnabled").set(true);
+    });
 
     // Firebase → ローカル同期
     participantsRef.on("value", snapshot => {
@@ -168,6 +183,13 @@
       updateParticipantSelect();
       updateAdminTable();
       updateAdminSelect();
+    });
+
+    // 状態をリアルタイム表示
+    settingsRef.child("pointsEnabled").on("value", snap => {
+      const enabled = snap.val();
+      document.getElementById("status").textContent =
+        "現在の状態: ポイント使用 " + (enabled ? "可能 ✅" : "制限中 ❌");
     });
 
     // 参加者追加
@@ -179,16 +201,12 @@
       participantsRef.child(name).set({
         points: 100,
         bets: {1:0,2:0,3:0,4:0,5:0,6:0}
-      })
-      .then(() => {
-        localStorage.setItem("myName", name);
-        myName = name;
-        document.getElementById("participantName").value = "";
-        alert("🎉 登録完了！ あなたのアカウントは「" + name + "」です。");
-      })
-      .catch(error => {
-        alert("❌ 参加者追加エラー: " + error.message);
       });
+
+      localStorage.setItem("myName", name);
+      myName = name;
+      document.getElementById("participantName").value = "";
+      alert("登録完了！ あなたのアカウントは「" + name + "」です。");
     }
 
     // 登録済み参加者リスト
@@ -206,7 +224,6 @@
     function updateParticipantSelect() {
       const select = document.getElementById("selectParticipant");
       select.innerHTML = '';
-
       if (myName && participants[myName]) {
         const option = document.createElement("option");
         option.value = myName;
@@ -236,45 +253,44 @@
       document.getElementById("myPoints").innerText = participants[name]?.points || 0;
     }
 
-    // ベット処理
+    // ベット処理（累積）
     function submitBets() {
       const name = document.getElementById("selectParticipant").value;
       if (!myName || name !== myName) {
         return alert("自分のアカウントでのみ操作できます");
       }
-
       const p = participants[name];
       if (!p) return alert("参加者が見つかりません");
 
-      const bets = {...p.bets};
-      let newBetSum = 0;
-
-      for (let i = 1; i <= 6; i++) {
-        let val = document.getElementById("bet" + i).value || "0";
-        let bet = parseInt(val, 10);
-        if (isNaN(bet) || bet < 0) {
-          return alert("ポイントは 0 以上の整数で入力してください");
+      // 使用制限を確認
+      settingsRef.child("pointsEnabled").once("value").then(snap => {
+        if (!snap.val()) {
+          alert("❌ 現在はポイントを使用できません");
+          return;
         }
-        bets[i] += bet;
-        newBetSum += bet;
-      }
 
-      if (newBetSum > p.points) {
-        alert("ポイントが足りません！");
-        return;
-      }
-
-      participantsRef.child(name).update({
-        points: p.points - newBetSum,
-        bets: bets
+        const bets = {...p.bets};
+        let newBetSum = 0;
+        for (let i = 1; i <= 6; i++) {
+          let val = document.getElementById("bet" + i).value || "0";
+          let bet = parseInt(val, 10);
+          if (isNaN(bet) || bet < 0) return alert("ポイントは 0 以上の整数で入力してください");
+          bets[i] += bet;
+          newBetSum += bet;
+        }
+        if (newBetSum > p.points) {
+          alert("ポイントが足りません！");
+          return;
+        }
+        participantsRef.child(name).update({
+          points: p.points - newBetSum,
+          bets: bets
+        });
+        for (let i = 1; i <= 6; i++) document.getElementById("bet" + i).value = "0";
       });
-
-      for (let i = 1; i <= 6; i++) {
-        document.getElementById("bet" + i).value = "0";
-      }
     }
 
-    // 管理者テーブル更新
+    // 管理者テーブル
     function updateAdminTable() {
       const tbody = document.getElementById("adminTable").querySelector("tbody");
       tbody.innerHTML = '';
@@ -284,7 +300,6 @@
           Array.from({length:6},(_,i)=>`<td>${data.bets[i+1]}</td>`).join('');
         tbody.appendChild(tr);
       });
-
       const totalBets = [0,0,0,0,0,0];
       Object.values(participants).forEach(p=>{
         for(let i=1;i<=6;i++) totalBets[i-1] += p.bets[i] || 0;
@@ -292,8 +307,7 @@
       const trTotal = document.createElement("tr");
       trTotal.style.fontWeight = "bold";
       trTotal.style.backgroundColor = "#d0ffd0";
-      trTotal.innerHTML = `<td>合計</td><td>-</td>` +
-        totalBets.map(v=>`<td>${v}</td>`).join('');
+      trTotal.innerHTML = `<td>合計</td><td>-</td>` + totalBets.map(v=>`<td>${v}</td>`).join('');
       tbody.appendChild(trTotal);
     }
 
@@ -328,9 +342,7 @@
       Object.entries(participants).forEach(([name,p])=>{
         const bet = p.bets[hit]||0;
         let newPoints = p.points;
-        if(bet>0){
-          newPoints += bet * odds;
-        }
+        if(bet>0){ newPoints += bet * odds; }
         participantsRef.child(name).update({
           points: newPoints,
           bets: {1:0,2:0,3:0,4:0,5:0,6:0}
@@ -346,22 +358,25 @@
       alert("参加者情報をリセットしました。");
     }
 
-    // ポイント増減
+    // ポイント増減処理
     function adjustPoints(isAdd) {
       const name = document.getElementById("editTarget").value;
       const amount = parseInt(document.getElementById("editAmount").value, 10);
-      if (!name || isNaN(amount) || amount <= 0) {
-        return alert("正しい数値を入力してください");
-      }
-
+      if (!name || isNaN(amount) || amount <= 0) return alert("正しい数値を入力してください");
       const p = participants[name];
       if (!p) return alert("参加者が見つかりません");
-
       let newPoints = p.points + (isAdd ? amount : -amount);
       if (newPoints < 0) newPoints = 0;
-
       participantsRef.child(name).update({ points: newPoints });
       alert(`${name} のポイントを ${isAdd ? "追加" : "減算"}しました`);
+    }
+
+    // 🔹 管理者が ON/OFF 切り替え
+    function togglePoints() {
+      settingsRef.child("pointsEnabled").once("value").then(snap => {
+        const current = snap.val();
+        settingsRef.child("pointsEnabled").set(!current);
+      });
     }
   </script>
 </body>
